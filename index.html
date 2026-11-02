@@ -26,8 +26,8 @@
 // каждые несколько минут; сервер дома записывает текущий адрес в gist, а эта страница
 // читает его, проверяет, что дом отвечает, и перекидывает туда. Данные входа Telegram
 // (#tgWebAppData…) передаются дальше как есть — проверяет их уже сам дом.
-const GIST = "https://gist.githubusercontent.com/kslavgorodskii-web/__GIST_ID__/raw/home.json";
-const GIST_API = "https://api.github.com/gists/__GIST_ID__";
+const GIST = "https://gist.githubusercontent.com/kslavgorodskii-web/ac1570d6be4b9ed8521a434190d84645/raw/home.json";
+const GIST_API = "https://api.github.com/gists/ac1570d6be4b9ed8521a434190d84645";
 const HASH = location.hash;
 const SELF = location.origin + location.pathname;
 const $msg = document.getElementById("msg"), $sub = document.getElementById("sub");
