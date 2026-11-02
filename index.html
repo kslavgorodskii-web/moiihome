@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>Дом</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root { color-scheme: light dark; }
   html, body { height: 100%; margin: 0; }
@@ -39,23 +40,62 @@ async function withTimeout(url, ms) {
   finally { clearTimeout(t); }
 }
 
-async function currentUrl() {
+async function homeInfo() {
   try {  // raw-адрес кэшируется CDN — параметр t обходит кэш
     const j = await (await withTimeout(GIST + "?t=" + Date.now(), 6000)).json();
-    if (j.url !== undefined) return j.url;
+    if (j.url !== undefined) return j;
   } catch (e) { /* пробуем API */ }
   const g = await (await withTimeout(GIST_API, 6000)).json();
-  return JSON.parse(g.files["home.json"].content).url;
+  return JSON.parse(g.files["home.json"].content);
+}
+
+async function myIp() {
+  try { return (await (await withTimeout("https://api.ipify.org?format=json", 3000)).json()).ip; }
+  catch (e) { return ""; }
 }
 
 async function alive(base) {
   try { return (await withTimeout(base + "/ping", 6000)).ok; } catch (e) { return false; }
 }
 
+// Дома (тот же внешний IP, что у дома) мини-апп открывается напрямую по Wi-Fi: туннель
+// бесплатно даёт ~4 КБ/с, а по Wi-Fi видео экрана идёт 30–40 к/с.
+// Прямой вход не удался (мини-апп вернулся с ?nolan=1) — 10 минут ходим через туннель.
+// Мини-апп, открывшись по Wi-Fi, ставит отметку lanOk в CloudStorage бота. Если прошлая
+// попытка была недавно, а отметки после неё нет — Telegram не открыл домашний адрес.
+const params = new URLSearchParams(location.search);
+if (params.has("nolan")) localStorage.lanBadUntil = Date.now() + 10 * 60 * 1000;
+
+function cloudGet(key) {
+  return new Promise((resolve) => {
+    const cs = window.Telegram?.WebApp?.CloudStorage;
+    if (!cs) return resolve(null);
+    setTimeout(() => resolve(null), 1500);
+    try { cs.getItem(key, (err, v) => resolve(err ? null : v)); } catch (e) { resolve(null); }
+  });
+}
+
+async function lanAllowed() {
+  if (Date.now() < +(localStorage.lanBadUntil || 0)) return false;
+  const tried = +(localStorage.lanTry || 0);
+  if (Date.now() - tried > 10 * 60 * 1000) return true;
+  return +(await cloudGet("lanOk") || 0) >= tried;
+}
+
 async function go() {
+  window.Telegram?.WebApp?.ready?.();
+  const ipPromise = lanAllowed().then((ok) => ok ? myIp() : "");
   for (let attempt = 1; ; attempt++) {
     try {
-      const base = await currentUrl();
+      const info = await homeInfo();
+      const ip = await ipPromise;
+      if (info.lan && info.home_ip && ip && ip === info.home_ip) {
+        $msg.textContent = "Вы дома — открываю напрямую…";
+        localStorage.lanTry = Date.now();
+        location.replace(info.lan + "/app?l=" + encodeURIComponent(SELF) + HASH);
+        return;
+      }
+      const base = info.url;
       if (base && await alive(base)) {
         $msg.textContent = "Открываю…";
         location.replace(base + "/app?l=" + encodeURIComponent(SELF) + HASH);
