@@ -27,8 +27,8 @@
 // каждые несколько минут; сервер дома записывает текущий адрес в gist, а эта страница
 // читает его, проверяет, что дом отвечает, и перекидывает туда. Данные входа Telegram
 // (#tgWebAppData…) передаются дальше как есть — проверяет их уже сам дом.
-const GIST = "https://gist.githubusercontent.com/kslavgorodskii-web/ac1570d6be4b9ed8521a434190d84645/raw/home.json";
-const GIST_API = "https://api.github.com/gists/ac1570d6be4b9ed8521a434190d84645";
+const GIST = "https://gist.githubusercontent.com/kslavgorodskii-web/c5de3cec6249caae10deb58015fc6b36/raw/home.json";
+const GIST_API = "https://api.github.com/gists/c5de3cec6249caae10deb58015fc6b36";
 const HASH = location.hash;
 const SELF = location.origin + location.pathname;
 const $msg = document.getElementById("msg"), $sub = document.getElementById("sub");
@@ -85,14 +85,17 @@ async function lanAllowed() {
 async function go() {
   window.Telegram?.WebApp?.ready?.();
   const ipPromise = lanAllowed().then((ok) => ok ? myIp() : "");
+  // Домашний IP и адрес в Wi-Fi лежат в личном хранилище Telegram (их кладёт сам мини-апп),
+  // а не в публичном gist.
+  const netPromise = cloudGet("homeNet").then((v) => { try { return JSON.parse(v) || {}; } catch (e) { return {}; } });
   for (let attempt = 1; ; attempt++) {
     try {
       const info = await homeInfo();
-      const ip = await ipPromise;
-      if (info.lan && info.home_ip && ip && ip === info.home_ip) {
+      const ip = await ipPromise, net = await netPromise;
+      if (net.lan && net.ip && ip && ip === net.ip && /^http:\/\/(192\.168|10|172\.(1[6-9]|2\d|3[01]))\./.test(net.lan)) {
         $msg.textContent = "Вы дома — открываю напрямую…";
         localStorage.lanTry = Date.now();
-        location.replace(info.lan + "/app?l=" + encodeURIComponent(SELF) + HASH);
+        location.replace(net.lan + "/app?l=" + encodeURIComponent(SELF) + HASH);
         return;
       }
       const base = info.url;
